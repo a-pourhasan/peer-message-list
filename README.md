@@ -6,6 +6,12 @@ Built as an exploration of UI architecture patterns for real-time, serverless co
 
 ---
 
+<p align="center">
+  <img src="./docs/simulation.gif" alt="P2P Event Stream & Indexer Demo" width="850" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+</p>
+
+---
+
 ## Architecture Overview
 
 In distributed P2P topologies, nodes broadcast data across unpredictable network hops, clock skews, and intermittent reconnections. Standard front-end architectures that re-render upon receiving every incoming packet collapse under high message volumes.
@@ -27,8 +33,6 @@ This project decouples data ingestion, indexing, and rendering into distinct lay
                  ▼
       [ Virtualized Viewport ] ─── Constant DOM Footprint (~15-25 nodes for 10,000+ items)
 ```
-
----
 
 ## Core Technical Highlights
 
@@ -53,8 +57,6 @@ This project decouples data ingestion, indexing, and rendering into distinct lay
 
 - Abstract `Transport` interface allowing zero-overhead swapping between simulated packet seeders, WebSockets, or live P2P gossip protocols.
 
----
-
 ## Performance Benchmark
 
 Measured via standard React `Profiler` on an ingested stream under concurrent load:
@@ -64,12 +66,12 @@ Measured via standard React `Profiler` on an ingested stream under concurrent lo
 | **Burst Stress Test** | 5,000 items (out of order) |     5,000      |               0                | **~0.5 ms - 1.2 ms** | 60 FPS (Zero blocking) |
 | **P2P Live Stream**   | Continuous (~40 pkts/sec)  |    Dynamic     | ~5% network duplicates dropped |     **~0.4 ms**      |    Smooth Scrolling    |
 
----
-
 ## Project Structure
 
 ```text
 peer-message-list/
+├── docs/
+│   └── simulation.gif         # Interactive feed demo & profiler benchmark
 ├── .github/
 │   └── workflows/ci.yml       # Automated CI test & build pipeline
 ├── src/
@@ -89,8 +91,6 @@ peer-message-list/
 ├── tsconfig.json
 └── vite.config.ts
 ```
-
----
 
 ## Getting Started
 
@@ -130,8 +130,6 @@ Type-check and produce optimized production bundle:
 ```bash
 npm run build
 ```
-
----
 
 ## License
 
