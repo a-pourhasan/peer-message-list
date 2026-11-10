@@ -24,19 +24,21 @@ describe('message index', () => {
     expect(index.getAll().map((m) => m.id)).toEqual(['a', 'b']);
   });
 
-  it('keeps messages are not duplicated', () => {
+  it('ignores duplicate ids but still counts them as received', () => {
     const index = createMessageIndex();
-    index.add(msg('m0', 100));
-    index.add(msg('m0', 100));
+    expect(index.add(msg('m0', 100))).toBe(true);
+    expect(index.add(msg('m0', 100))).toBe(false);
     expect(index.getAll().map((m) => m.id)).toEqual(['m0']);
+    expect(index.getStats()).toEqual({ received: 2, unique: 1 });
   });
 
-  it('checks if the message list is clear', () => {
+  it('clear resets the list, the stats and the seen ids', () => {
     const index = createMessageIndex();
     index.add(msg('m1', 200));
-    index.add(msg('m2', 400));
     index.add(msg('m0', 100));
     index.clear();
-    expect(index.getAll().length).toEqual(0);
+    expect(index.getAll()).toHaveLength(0);
+    expect(index.getStats()).toEqual({ received: 0, unique: 0 });
+    expect(index.add(msg('m1', 200))).toBe(true);
   });
 });
