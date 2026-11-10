@@ -1,96 +1,161 @@
 # Peer Message List
 
-A high-performance, decentralized event log engineered for peer-to-peer (P2P) desktop environments. Designed to ingest, deduplicate, and render thousands of concurrent, out-of-order event packets at 60 FPS with deterministic ordering and bounded memory consumption.
+A high-performance, real-time event indexing and rendering engine designed for peer-to-peer (P2P) desktop applications.
 
-Built as an exploration of UI architecture patterns for real-time, serverless collaboration platforms (e.g., Holepunch / Pear Runtime / Keet Desktop).
+Peer Message List explores scalable frontend architecture for handling high-volume, out-of-order event streams. It focuses on deterministic message ordering, efficient deduplication, batched state updates, and windowed virtualization to maintain responsive UI performance under heavy workloads.
+
+Built as an architectural exploration for decentralized collaboration platforms and desktop environments such as Holepunch, Pear Runtime, and Keet.
 
 ---
 
+## Simulation Demo
+
+The following simulation demonstrates the message processing pipeline under concurrent, out-of-order packet delivery.
+
+It showcases:
+
+- Real-time message ingestion and indexing.
+- Duplicate packet detection and rejection.
+- Deterministic chronological ordering.
+- Batched state updates using `requestAnimationFrame`.
+- Virtualized rendering with a bounded DOM footprint.
+- Live processing statistics and UI performance monitoring.
+
 <p align="center">
-  <img src="./docs/simulation.gif" alt="P2P Event Stream & Indexer Demo" width="850" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+  <img src="./docs/demos/simulation.gif" alt="Peer Message List - Real-time Event Stream Simulation" width="850" />
 </p>
 
 ---
 
 ## Architecture Overview
 
-In distributed P2P topologies, nodes broadcast data across unpredictable network hops, clock skews, and intermittent reconnections. Standard front-end architectures that re-render upon receiving every incoming packet collapse under high message volumes.
+In distributed P2P environments, messages can arrive out of order due to unpredictable network latency, clock differences, and intermittent connectivity.
 
-This project decouples data ingestion, indexing, and rendering into distinct layers:
+Updating the entire UI for every incoming packet can introduce unnecessary rendering overhead and negatively affect responsiveness.
 
+Peer Message List addresses this challenge by separating message ingestion, indexing, state management, and rendering into independent layers.
+
+### Data Flow
+
+```text
+[ P2P Transport / WebSocket / Simulated Stream ]
+                       |
+                       v
+              [ Ingestion Queue ]
+                       |
+                       v
+          [ Scheduled Batch Processing ]
+              requestAnimationFrame
+                       |
+                       v
+                [ Message Index ]
+           Deduplication & Binary Search
+                       |
+                       v
+                [ Zustand Store ]
+             Immutable State Snapshots
+                       |
+                       v
+              [ Virtualized Viewport ]
+             Visible Rows + Overscan
 ```
-[ P2P Transport / WebSocket / Stream ]
-                 │
-                 ▼
-     [ Ingestion Buffer Queue ]
-                 │
-                 ▼ (requestAnimationFrame / Scheduled Flush)
-      [ Core Inverted Index ] ─── Deduplication (Set<string>) & Binary-Insert Sorting
-                 │
-                 ▼
-       [ Zustand State Store ] ─── Immutable State Snapshots (O(1) reference comparison)
-                 │
-                 ▼
-      [ Virtualized Viewport ] ─── Constant DOM Footprint (~15-25 nodes for 10,000+ items)
-```
+
+Each layer has a specific responsibility, allowing the transport, indexing logic, and rendering system to evolve independently.
+
+---
 
 ## Core Technical Highlights
 
-### 1. Deterministic Ingestion & Deduplication (`src/core/messageIndex.ts`)
+### 1. Deterministic Message Indexing & Deduplication
 
-- **Deduplication:** Utilizes an in-memory `Set` lookup achieving $O(1)$ duplicate rejection before modifying state arrays.
-- **Order-Invariance:** Inserts packets using a binary search algorithm based on event timestamp (`ts`), guaranteeing consistent chronologic ordering regardless of network arrival delays.
-- **Telemetry Counters:** Tracks total packets received, unique indexed items, and dropped duplicates in constant time.
+`src/core/messageIndex.ts`
 
-### 2. State Batching with rAF (`src/store/messageStore.ts`)
+- **O(1) Duplicate Detection:** Uses an in-memory `Set<string>` to identify previously processed message IDs before modifying the indexed collection.
+- **Chronological Ordering:** Uses binary search to determine the correct insertion position based on event timestamps (`ts`).
+- **Arrival-Order Independence:** Maintains timestamp-based ordering regardless of packet arrival sequence.
+- **Constant-Time Telemetry:** Tracks received packets, unique indexed messages, and rejected duplicates without repeatedly traversing the entire collection.
 
-- Avoids micro-task starvation and layout thrashing by buffering incoming stream messages in an unreactive queue.
-- Flushes mutations to the reactive state exactly once per display refresh cycle via `requestAnimationFrame`.
-- Enforces strict immutability upon flush (`items.slice()`), ensuring React shallow comparisons trigger memoized updates reliably.
+### 2. Batched State Management with requestAnimationFrame
 
-### 3. Windowed Virtualization (`src/components/VirtualizedList.tsx`)
+`src/store/messageStore.ts`
 
-- Custom viewport virtualization engine with dynamic scroll offset calculations.
-- Restricts live DOM elements to only visible rows plus a small overscan buffer (5 rows), keeping memory usage and rendering times flat ($\approx 0.5\text{ ms}$) whether processing 50 or 50,000 records.
+- **Buffered Ingestion:** Incoming messages are temporarily stored in a non-reactive queue to avoid triggering unnecessary state updates.
+- **Frame-Synchronized Updates:** Batches queued messages and flushes state updates through `requestAnimationFrame`.
+- **Immutable State Snapshots:** Creates updated array references using `items.slice()` to ensure compatibility with React's reference-based change detection.
+- **Reduced Rendering Overhead:** Groups multiple incoming events into fewer state updates instead of updating the UI for every packet.
 
-### 4. Decoupled Transport Layer (`src/core/transport.ts`)
+### 3. Windowed List Virtualization
 
-- Abstract `Transport` interface allowing zero-overhead swapping between simulated packet seeders, WebSockets, or live P2P gossip protocols.
+`src/components/VirtualizedList.tsx`
+
+- **Custom Virtualization Engine:** Calculates visible list boundaries dynamically using the current scroll position.
+- **Bounded DOM Rendering:** Renders only visible rows and a configurable overscan buffer.
+- **Scalable Rendering:** Avoids creating DOM elements for every indexed message, even when processing large datasets.
+- **Consistent UI Responsiveness:** Keeps the rendered DOM footprint proportional to the viewport rather than the total message count.
+
+### 4. Decoupled Transport Abstraction
+
+`src/core/transport.ts`
+
+- **Transport Interface:** Defines a common interface for different message delivery mechanisms.
+- **Flexible Integration:** Supports simulated message sources and provides an integration point for WebSocket or P2P transport implementations.
+- **Separation of Concerns:** Keeps network delivery logic independent from message indexing and UI state management.
+
+---
 
 ## Performance Benchmark
 
-Measured via standard React `Profiler` on an ingested stream under concurrent load:
+The following measurements represent the project's simulation and rendering tests.
 
-| Scenario              |      Ingestion Volume      | Indexed Unique |      Duplicate Rejection       |   Avg. Render Time   |   UI Responsiveness    |
-| :-------------------- | :------------------------: | :------------: | :----------------------------: | :------------------: | :--------------------: |
-| **Burst Stress Test** | 5,000 items (out of order) |     5,000      |               0                | **~0.5 ms - 1.2 ms** | 60 FPS (Zero blocking) |
-| **P2P Live Stream**   | Continuous (~40 pkts/sec)  |    Dynamic     | ~5% network duplicates dropped |     **~0.4 ms**      |    Smooth Scrolling    |
+| Scenario                    |         Ingestion Volume | Indexed Unique | Duplicate Rejection | Avg. Render Time | UI Responsiveness |
+| --------------------------- | -----------------------: | -------------: | ------------------: | ---------------: | ----------------- |
+| Burst Stress Test           | 5,000 out-of-order items |          5,000 |                   0 |      ~0.5–1.2 ms | 60 FPS target     |
+| Simulated Continuous Stream |          ~40 packets/sec |        Dynamic |                 ~5% |          ~0.4 ms | Smooth scrolling  |
+
+**Benchmark notes:**
+
+- Rendering measurements refer to observed React Profiler render durations, not total packet processing latency.
+- The continuous stream uses simulated packet delivery.
+- Results depend on hardware, browser environment, dataset characteristics, and test conditions.
+- The 60 FPS figure represents the rendering target rather than a guarantee across all devices.
+
+---
 
 ## Project Structure
 
 ```text
 peer-message-list/
 ├── docs/
-│   └── simulation.gif         # Interactive feed demo & profiler benchmark
+│   └── demos/
+│       └── simulation.gif
+│
 ├── .github/
-│   └── workflows/ci.yml       # Automated CI test & build pipeline
+│   └── workflows/
+│       └── ci.yml
+│
 ├── src/
 │   ├── components/
-│   │   └── VirtualizedList.tsx# Windowed list rendering component
+│   │   └── VirtualizedList.tsx
+│   │
 │   ├── core/
-│   │   ├── messageIndex.ts    # Deduplication and timestamp-sorted indexing
-│   │   ├── messageIndex.test.ts # Unit tests for index operations
-│   │   └── transport.ts       # Decoupled streaming and network transport abstraction
+│   │   ├── messageIndex.ts
+│   │   ├── messageIndex.test.ts
+│   │   └── transport.ts
+│   │
 │   ├── store/
-│   │   ├── messageStore.ts    # Zustand store with injected scheduler & batching
-│   │   ├── messageStore.test.ts # Vitest suite for batched flushes & immutability
-│   │   └── useMessages.ts     # Store selector hooks
-│   ├── App.tsx                # Interactive control dashboard & Profiler monitor
-│   └── main.tsx               # Application bootstrap
+│   │   ├── messageStore.ts
+│   │   ├── messageStore.test.ts
+│   │   └── useMessages.ts
+│   │
+│   ├── App.tsx
+│   └── main.tsx
+│
 ├── package.json
 ├── tsconfig.json
 └── vite.config.ts
 ```
+
+---
 
 ## Getting Started
 
@@ -101,6 +166,8 @@ peer-message-list/
 
 ### Installation
 
+Clone the repository and install dependencies:
+
 ```bash
 git clone https://github.com/a-pourhasan/peer-message-list.git
 cd peer-message-list
@@ -109,7 +176,7 @@ npm install
 
 ### Development
 
-Start the local Vite development server:
+Start the Vite development server:
 
 ```bash
 npm run dev
@@ -117,7 +184,7 @@ npm run dev
 
 ### Testing
 
-Run unit and integration suites (100% pass on state immutability, batching, and indexing):
+Run the unit and integration tests:
 
 ```bash
 npm test
@@ -125,12 +192,25 @@ npm test
 
 ### Production Build
 
-Type-check and produce optimized production bundle:
+Run the production build and TypeScript checks:
 
 ```bash
 npm run build
 ```
 
+---
+
+## Tech Stack
+
+- **React** — Component-based UI architecture.
+- **TypeScript** — Type-safe application logic.
+- **Zustand** — Lightweight state management.
+- **Vite** — Development server and production bundling.
+- **Vitest** — Unit and integration testing.
+- **requestAnimationFrame** — Frame-synchronized state batching.
+
+---
+
 ## License
 
-MIT
+This project is licensed under the MIT License.
