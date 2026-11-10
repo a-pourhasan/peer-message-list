@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useRef, useState, useMemo, useCallback, type FC } from 'react';
 import type { Message } from '../core/messageIndex';
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
   viewportHeight?: number;
 }
 
-export const VirtualizedList: React.FC<Props> = ({
+export const VirtualizedList: FC<Props> = ({
   items,
   itemHeight = 44,
   viewportHeight = 520,

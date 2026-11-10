@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, Profiler, useState } from 'react';
+import { useEffect, useMemo, Profiler, useState } from 'react';
 import { messageStore, useMessages } from './store/useMessages';
 import { VirtualizedList } from './components/VirtualizedList';
 import { SimulatedP2PTransport } from './core/transport';
